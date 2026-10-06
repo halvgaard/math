@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Algebra</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <nav class="app-switch" aria-label="Prototype switcher">
+          <a href="../algebra/index.html" aria-current="page">algebra</a>
+          <a href="../lines/index.html">line</a>
+        </nav>
+        <nav class="levelbar" aria-label="Equation set">
+          <button class="level-button is-active" type="button" data-level="isolate">2x + 1 = 3x + 8</button>
+          <button class="level-button" type="button" data-level="combine">2x + 3x = 10</button>
+          <button class="level-button" type="button" data-level="coefficient">4x - 5 = 11</button>
+          <button class="level-button" type="button" data-level="parentheses">3(x + 2) = 15</button>
+          <button class="level-button" type="button" data-level="signedParentheses">-2(x - 3) = 10</button>
+        </nav>
+      </header>
+
+      <section class="stage" id="stage" aria-label="Equation playground">
+        <div class="side side-left" id="leftSide" data-side="left"></div>
+        <button class="equals-zone" id="equalsZone" type="button" aria-label="Double click to swap left and right sides">
+          <span>=</span>
+        </button>
+        <div class="side side-right" id="rightSide" data-side="right"></div>
+        <div class="ghost-layer" id="ghostLayer" aria-hidden="true"></div>
+      </section>
+
+      <section class="toolbar" aria-label="Equation tools">
+        <button type="button" id="undoButton">Undo</button>
+        <button type="button" id="resetButton">Reset</button>
+        <button type="button" id="combineButton">Combine</button>
+        <button type="button" id="simplifyButton">Simplify</button>
+        <button type="button" id="revealButton">Reveal</button>
+        <button type="button" id="hintButton">Hint</button>
+      </section>
+
+      <section class="readout" aria-live="polite">
+        <div>
+          <span class="readout-label">Rule</span>
+          <p id="ruleText">Ready.</p>
+        </div>
+        <div>
+          <span class="readout-label">State</span>
+          <p id="stateText">Terms can move, split, combine, and simplify.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

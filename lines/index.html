@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Line Motion Prototype</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <nav class="app-switch" aria-label="Prototype switcher">
+          <a href="../algebra/index.html">algebra</a>
+          <a href="../lines/index.html" aria-current="page">line</a>
+        </nav>
+        <div class="toolbar" aria-label="Line presets">
+          <button type="button" id="resetButton">Reset</button>
+          <button type="button" id="snapButton">Snap</button>
+        </div>
+      </header>
+
+      <section class="equation-panel" aria-live="polite">
+        <p id="equationText">y = 0.5x + 1</p>
+      </section>
+
+      <section class="stage" aria-label="Coordinate playground">
+        <svg id="graph" class="graph" viewBox="0 0 760 520" role="img" aria-labelledby="graphTitle">
+          <title id="graphTitle">Coordinate plane with a draggable line</title>
+          <defs>
+            <clipPath id="plotClip">
+              <rect id="clipRect"></rect>
+            </clipPath>
+          </defs>
+          <rect id="plotBackground" class="plot-background"></rect>
+          <rect id="gridHit" class="grid-hit"></rect>
+          <g id="gridLayer"></g>
+          <g id="axisLayer"></g>
+          <g id="lineLayer" clip-path="url(#plotClip)">
+            <line id="lineShadow" class="line-shadow"></line>
+            <line id="line" class="line"></line>
+            <line id="lineHit" class="line-hit"></line>
+          </g>
+          <g id="pointLayer"></g>
+          <circle id="snapPoint" class="snap-point" r="7"></circle>
+        </svg>
+      </section>
+
+      <dl class="shortcuts" aria-label="Shortcuts and controls">
+        <div>
+          <dt>drag</dt>
+          <dd>move</dd>
+        </div>
+        <div>
+          <dt>right drag</dt>
+          <dd>slope</dd>
+        </div>
+        <div>
+          <dt>ctrl</dt>
+          <dd>free</dd>
+        </div>
+        <div>
+          <dt>click point</dt>
+          <dd>insert</dd>
+        </div>
+        <div>
+          <dt>dbl click</dt>
+          <dd>edit</dd>
+        </div>
+        <div>
+          <dt>enter / esc</dt>
+          <dd>save / undo</dd>
+        </div>
+      </dl>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
