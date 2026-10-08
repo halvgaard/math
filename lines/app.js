@@ -11,6 +11,8 @@ const dom = {
   lineHit: document.getElementById("lineHit"),
   pointLayer: document.getElementById("pointLayer"),
   snapPoint: document.getElementById("snapPoint"),
+  lineHint: document.getElementById("lineHint"),
+  pointHint: document.getElementById("pointHint"),
   equationText: document.getElementById("equationText"),
   resetButton: document.getElementById("resetButton"),
   snapButton: document.getElementById("snapButton"),
@@ -30,6 +32,9 @@ const plot = {
 const VERTICAL_EPSILON = 0.03;
 const SLOPE_RUN_UNITS = 1;
 const MAX_FRACTION_DENOMINATOR = 12;
+const MIN_AXIS_EXTENT = 2;
+const MAX_AXIS_EXTENT = 30;
+const AXIS_SCALE_PIXELS_PER_UNIT = 28;
 
 const state = {
   angle: Math.atan(0.5),
@@ -135,6 +140,8 @@ function renderStaticGraph() {
       class: "axis",
     }),
   );
+  appendAxisScaleHandle("x", plot.x + plot.width, worldToScreenY(0));
+  appendAxisScaleHandle("y", worldToScreenX(0), plot.y);
   dom.axisLayer.append(
     makeSvg("text", {
       x: plot.x + plot.width + 18,
@@ -153,6 +160,34 @@ function renderStaticGraph() {
   );
 
   dom.gridLayer.append(makeSvg("line", { id: "snapGuide", class: "snap-guide" }));
+}
+
+function appendAxisScaleHandle(axis, x, y) {
+  const group = makeSvg("g", {
+    class: `axis-scale-handle axis-scale-handle-${axis}`,
+    "aria-label": `Drag to scale ${axis} axis`,
+  });
+  group.dataset.axis = axis;
+  group.addEventListener("pointerdown", (event) => onPointerDown(event, `axis-${axis}`));
+
+  group.append(
+    makeSvg("circle", {
+      cx: x,
+      cy: y,
+      r: 15,
+      class: "axis-scale-hit",
+    }),
+  );
+  group.append(
+    makeSvg("circle", {
+      cx: x,
+      cy: y,
+      r: 4.5,
+      class: "axis-scale-dot",
+    }),
+  );
+
+  dom.axisLayer.append(group);
 }
 
 function renderPoints() {
@@ -233,6 +268,9 @@ function appendPoint(point, options = {}) {
   }
 
   if (options.selected) {
+    circle.addEventListener("pointerenter", (event) => showPointHint(event, point));
+    circle.addEventListener("pointermove", movePointHint);
+    circle.addEventListener("pointerleave", hidePointHint);
     circle.addEventListener("click", (event) => {
       event.stopPropagation();
       toggleSelectedPoint(point);
@@ -498,19 +536,111 @@ function resizeEquationInput(input) {
   input.style.width = `${Math.max(1, input.value.length) + 0.8}ch`;
 }
 
+function showLineHint(event) {
+  if (event.pointerType === "touch" || state.drag) {
+    return;
+  }
+
+  moveFloatingHint(dom.lineHint, event);
+  dom.lineHint.classList.add("is-visible");
+  dom.lineHint.setAttribute("aria-hidden", "false");
+}
+
+function moveLineHint(event) {
+  if (event.pointerType === "touch" || state.drag) {
+    return;
+  }
+
+  moveFloatingHint(dom.lineHint, event);
+}
+
+function hideLineHint() {
+  dom.lineHint.classList.remove("is-visible");
+  dom.lineHint.setAttribute("aria-hidden", "true");
+}
+
+function showPointHint(event, point) {
+  if (event.pointerType === "touch" || state.drag) {
+    return;
+  }
+
+  hideLineHint();
+  dom.pointHint.textContent = `(${formatValue(point.x)}, ${formatValue(point.y)})`;
+  moveFloatingHint(dom.pointHint, event);
+  dom.pointHint.classList.add("is-visible");
+  dom.pointHint.setAttribute("aria-hidden", "false");
+}
+
+function movePointHint(event) {
+  if (event.pointerType === "touch" || state.drag) {
+    return;
+  }
+
+  moveFloatingHint(dom.pointHint, event);
+}
+
+function hidePointHint() {
+  dom.pointHint.classList.remove("is-visible");
+  dom.pointHint.setAttribute("aria-hidden", "true");
+}
+
+function isAxisScaleMode(mode) {
+  return mode === "axis-x" || mode === "axis-y";
+}
+
+function getAxisExtent(axis) {
+  return axis === "x" ? plot.maxX : plot.maxY;
+}
+
+function setAxisExtent(axis, rawExtent) {
+  const extent = clamp(Math.round(rawExtent), MIN_AXIS_EXTENT, MAX_AXIS_EXTENT);
+
+  if (axis === "x") {
+    plot.minX = -extent;
+    plot.maxX = extent;
+    return;
+  }
+
+  plot.minY = -extent;
+  plot.maxY = extent;
+}
+
+function moveFloatingHint(hint, event) {
+  const stageRect = dom.graph.parentElement.getBoundingClientRect();
+  const hintRect = hint.getBoundingClientRect();
+  const margin = 10;
+  const offset = 14;
+  let x = event.clientX - stageRect.left + offset;
+  let y = event.clientY - stageRect.top - hintRect.height - offset;
+
+  if (y < margin) {
+    y = event.clientY - stageRect.top + offset;
+  }
+
+  x = clamp(x, margin, stageRect.width - hintRect.width - margin);
+  y = clamp(y, margin, stageRect.height - hintRect.height - margin);
+  hint.style.transform = `translate(${x}px, ${y}px)`;
+}
+
 function onPointerDown(event, modeOverride = null) {
   if (event.button !== 0 && event.button !== 2) {
     return;
   }
 
+  const mode = modeOverride ?? (event.button === 2 ? "slope" : "intercept");
+  if (isAxisScaleMode(mode) && event.button !== 0) {
+    return;
+  }
+
   event.preventDefault();
+  hideLineHint();
+  hidePointHint();
 
   if (state.editing) {
     commitEquationEdit();
   }
 
   const pointer = eventToWorld(event);
-  const mode = modeOverride ?? (event.button === 2 ? "slope" : "intercept");
   const pivot = { x: 0, y: state.intercept };
   const pointerAngle = getPointerAngle(pointer, pivot, state.angle);
 
@@ -532,12 +662,19 @@ function onPointerDown(event, modeOverride = null) {
     lastPointerAngle: pointerAngle,
     lastPointer: pointer,
     startIntercept: state.intercept,
+    startAxisExtentX: getAxisExtent("x"),
+    startAxisExtentY: getAxisExtent("y"),
     pivot,
   };
 
-  dom.graph.classList.add("is-dragging");
+  dom.graph.classList.toggle("is-dragging", !isAxisScaleMode(mode));
+  dom.graph.classList.toggle("is-axis-scaling", isAxisScaleMode(mode));
   dom.graph.classList.toggle("is-slope-dragging", mode === "slope" || mode === "slope-handle");
-  renderSnapGuide(shouldSnapOnRelease(event));
+  if (isAxisScaleMode(mode)) {
+    clearSnapGuide();
+  } else {
+    renderSnapGuide(shouldSnapOnRelease(event));
+  }
 
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
@@ -556,6 +693,22 @@ function onPointerMove(event) {
   }
   const pointer = eventToWorld(event);
   state.drag.lastPointer = pointer;
+
+  if (state.drag.mode === "axis-x") {
+    const delta = (event.clientX - state.drag.startClientX) / AXIS_SCALE_PIXELS_PER_UNIT;
+    setAxisExtent("x", state.drag.startAxisExtentX + delta);
+    renderStaticGraph();
+    render();
+    return;
+  }
+
+  if (state.drag.mode === "axis-y") {
+    const delta = (state.drag.startClientY - event.clientY) / AXIS_SCALE_PIXELS_PER_UNIT;
+    setAxisExtent("y", state.drag.startAxisExtentY + delta);
+    renderStaticGraph();
+    render();
+    return;
+  }
 
   if (state.drag.mode === "intercept") {
     state.intercept = clamp(
@@ -596,6 +749,11 @@ function onPointerUp(event) {
 
   cleanupDrag();
 
+  if (isAxisScaleMode(mode)) {
+    render();
+    return;
+  }
+
   if (!finishedDrag.moved) {
     toggleSelectedPoint(getNearestGridPoint(finishedDrag.lastPointer));
     return;
@@ -621,6 +779,8 @@ function onGridClick(event) {
 }
 
 function toggleSelectedPoint(point) {
+  hidePointHint();
+
   if (state.selectedPoint && state.selectedPoint.x === point.x && state.selectedPoint.y === point.y) {
     state.selectedPoint = null;
   } else {
@@ -651,7 +811,7 @@ function cleanupDrag() {
   window.removeEventListener("pointerup", onPointerUp);
   window.removeEventListener("pointercancel", onPointerCancel);
   state.drag = null;
-  dom.graph.classList.remove("is-dragging", "is-slope-dragging", "is-snapping");
+  dom.graph.classList.remove("is-dragging", "is-axis-scaling", "is-slope-dragging", "is-snapping");
   clearSnapGuide();
 }
 
@@ -760,6 +920,9 @@ function resetLine() {
   state.intercept = 1;
   state.selectedPoint = null;
   state.editing = null;
+  setAxisExtent("x", 10);
+  setAxisExtent("y", 7);
+  renderStaticGraph();
   render();
 }
 
@@ -1058,6 +1221,9 @@ function cleanValue(value) {
   return rounded;
 }
 
+dom.lineHit.addEventListener("pointerenter", showLineHint);
+dom.lineHit.addEventListener("pointermove", moveLineHint);
+dom.lineHit.addEventListener("pointerleave", hideLineHint);
 dom.lineHit.addEventListener("pointerdown", onPointerDown);
 dom.gridHit.addEventListener("click", onGridClick);
 dom.graph.addEventListener("contextmenu", (event) => event.preventDefault());

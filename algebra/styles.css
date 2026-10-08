@@ -84,8 +84,46 @@ button {
   gap: 8px;
 }
 
+.equation-controls {
+  min-width: 0;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.equation-form {
+  width: min(100%, 560px);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.equation-form input {
+  min-width: 260px;
+  width: min(46vw, 430px);
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 13px;
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: 0;
+  outline: none;
+}
+
+.equation-form input:focus {
+  border-color: var(--ink);
+}
+
+.equation-form input.is-invalid {
+  background: var(--warn);
+  border-color: var(--ink);
+}
+
 .level-button,
-.toolbar button {
+.toolbar button,
+.equation-form button {
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -320,6 +358,13 @@ button {
   border-bottom: 2px solid transparent;
   position: relative;
   z-index: 1;
+}
+
+.exponent {
+  align-self: flex-start;
+  margin-left: 0.04em;
+  font-size: 0.44em;
+  line-height: 1;
 }
 
 .factor[data-factor] {
@@ -636,6 +681,19 @@ button {
 
   .levelbar {
     justify-content: flex-start;
+  }
+
+  .equation-controls {
+    justify-items: stretch;
+  }
+
+  .equation-form {
+    width: 100%;
+  }
+
+  .equation-form input {
+    min-width: 0;
+    width: 100%;
   }
 
   .stage {

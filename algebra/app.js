@@ -1,5 +1,7 @@
 const dom = {
   stage: document.getElementById("stage"),
+  equationForm: document.getElementById("equationForm"),
+  equationInput: document.getElementById("equationInput"),
   leftSide: document.getElementById("leftSide"),
   rightSide: document.getElementById("rightSide"),
   equalsZone: document.getElementById("equalsZone"),
@@ -33,6 +35,7 @@ const state = {
   left: [],
   right: [],
   history: [],
+  customEquation: "",
   lastRule: "Ready.",
   selectedId: null,
   landedId: null,
@@ -149,17 +152,38 @@ function makeId(prefix = "t") {
 }
 
 function linearTerm(coefficient, options = {}) {
+  return variableTerm(1, coefficient, options);
+}
+
+function quadraticTerm(coefficient, options = {}) {
+  return variableTerm(2, coefficient, options);
+}
+
+function makeVariableTerm(degree, coefficient, options = {}) {
+  return degree === 2 ? quadraticTerm(coefficient, options) : linearTerm(coefficient, options);
+}
+
+function variableTerm(degree, coefficient, options = {}) {
   const sign = coefficient < 0 ? -1 : 1;
   const abs = Math.abs(coefficient);
   return {
-    id: makeId("x"),
-    kind: "linear",
+    id: makeId(degree === 2 ? "q" : "x"),
+    kind: degree === 2 ? "quadratic" : "linear",
     sign,
     coeff: abs,
     variable: "x",
+    degree,
     explicitMul: options.explicitMul ?? false,
     explicitCoeff: options.explicitCoeff ?? abs !== 1,
   };
+}
+
+function isVariableTerm(term) {
+  return term.kind === "linear" || term.kind === "quadratic";
+}
+
+function variableTermLabel(term) {
+  return term.degree > 1 ? `${term.variable}^${formatNumber(term.degree)}` : term.variable;
 }
 
 function constantTerm(value, options = {}) {
@@ -185,6 +209,7 @@ function groupTerm(coefficient, innerTerms, options = {}) {
     sign,
     coeff: abs,
     inner: innerTerms,
+    explicitCoeff: options.explicitCoeff ?? abs !== 1,
     explicitMul: options.explicitMul ?? false,
     parensVisible: options.parensVisible ?? true,
   };
@@ -201,13 +226,68 @@ function loadLevel(levelKey) {
   state.left = fresh.left;
   state.right = fresh.right;
   state.history = [];
+  state.customEquation = "";
   state.lastRule = "Ready.";
   state.selectedId = null;
   state.landedId = null;
   state.combinedId = null;
   state.pendingLandingId = null;
   state.distributingId = null;
+  if (dom.equationInput) {
+    dom.equationInput.value = equationLabel();
+    dom.equationInput.classList.remove("is-invalid");
+  }
   render();
+}
+
+function loadCustomEquation(rawEquation) {
+  const parsed = parseEquation(rawEquation);
+  const compactEquation = rawEquation.trim();
+
+  state.level = "custom";
+  state.left = parsed.left;
+  state.right = parsed.right;
+  state.history = [];
+  state.customEquation = compactEquation;
+  state.lastRule = `Loaded ${equationLabel()}.`;
+  state.selectedId = null;
+  state.landedId = null;
+  state.combinedId = null;
+  state.pendingLandingId = null;
+  state.distributingId = null;
+
+  if (dom.equationInput) {
+    dom.equationInput.value = compactEquation;
+    dom.equationInput.classList.remove("is-invalid");
+  }
+
+  render();
+}
+
+function submitCustomEquation(event) {
+  event.preventDefault();
+
+  if (animationLock) {
+    return;
+  }
+
+  try {
+    loadCustomEquation(dom.equationInput.value);
+  } catch (error) {
+    dom.equationInput.classList.add("is-invalid");
+    state.lastRule = error.message;
+    render();
+    dom.equationInput.focus();
+  }
+}
+
+function resetCurrentEquation() {
+  if (state.level === "custom" && state.customEquation) {
+    loadCustomEquation(state.customEquation);
+    return;
+  }
+
+  loadLevel(levels[state.level] ? state.level : "isolate");
 }
 
 function snapshot() {
@@ -307,8 +387,8 @@ function appendTermContent(root, term, index) {
     body.append(expression);
   }
 
-  if (term.kind === "linear") {
-    appendLinearBody(body, term);
+  if (isVariableTerm(term)) {
+    appendVariableTermBody(body, term);
   }
 
   if (term.kind === "group") {
@@ -339,7 +419,7 @@ function appendPendingDivision(root, pendingOp) {
   root.append(right);
 }
 
-function appendLinearBody(body, term) {
+function appendVariableTermBody(body, term) {
   const shouldShowCoeff = term.explicitCoeff || term.coeff !== 1;
 
   if (shouldShowCoeff) {
@@ -359,10 +439,17 @@ function appendLinearBody(body, term) {
   variable.className = "variable";
   variable.textContent = term.variable;
   body.append(variable);
+
+  if (term.degree > 1) {
+    const exponent = document.createElement("sup");
+    exponent.className = "exponent";
+    exponent.textContent = formatNumber(term.degree);
+    body.append(exponent);
+  }
 }
 
 function appendGroupBody(body, term) {
-  const shouldShowCoeff = term.coeff !== 1 || term.explicitMul;
+  const shouldShowCoeff = term.explicitCoeff || term.coeff !== 1 || term.explicitMul;
 
   if (shouldShowCoeff) {
     const coefficient = document.createElement("span");
@@ -418,19 +505,20 @@ function termLabel(term, index = 0, forceSign = false) {
     return `${prefix}${term.displayExpr ?? formatNumber(term.value)}`;
   }
 
-  if (term.kind === "linear") {
+  if (isVariableTerm(term)) {
     const shouldShowCoeff = term.explicitCoeff || term.coeff !== 1;
+    const variableLabel = variableTermLabel(term);
     if (!shouldShowCoeff) {
-      return `${prefix}${term.variable}`;
+      return `${prefix}${variableLabel}`;
     }
     const operator = term.explicitMul ? " * " : "";
-    return `${prefix}${formatNumber(term.coeff)}${operator}${term.variable}`;
+    return `${prefix}${formatNumber(term.coeff)}${operator}${variableLabel}`;
   }
 
   if (term.kind === "group") {
     const inner = term.inner.map((part, innerIndex) => termLabel(part, innerIndex)).join(" ");
     const grouped = term.parensVisible ? `(${inner})` : inner;
-    if (term.coeff === 1 && !term.explicitMul) {
+    if (term.coeff === 1 && !term.explicitCoeff && !term.explicitMul) {
       return `${prefix}${grouped}`;
     }
     const operator = term.explicitMul ? " * " : "";
@@ -448,6 +536,199 @@ function sideLabel(sideName) {
   return state[sideName].map((term, index) => termLabel(term, index)).join(" ") || "0";
 }
 
+function parseEquation(rawEquation) {
+  const normalized = normalizeEquationSource(rawEquation);
+
+  if (!normalized) {
+    throw new Error("Type an equation with an equals sign.");
+  }
+
+  const pieces = normalized.split("=");
+  if (pieces.length !== 2 || !pieces[0] || !pieces[1]) {
+    throw new Error("Use one equals sign, like 2x+1=3x+8.");
+  }
+
+  return {
+    left: parseEquationSide(pieces[0]),
+    right: parseEquationSide(pieces[1]),
+  };
+}
+
+function normalizeEquationSource(rawEquation) {
+  return rawEquation
+    .trim()
+    .replace(/\u2212/g, "-")
+    .replace(/\u00b2/g, "^2")
+    .replace(/,/g, ".")
+    .replace(/\s+/g, "");
+}
+
+function parseEquationSide(source) {
+  const parser = { source, index: 0 };
+  const terms = parseTermList(parser, { stopAtParen: false, allowGroups: true });
+
+  if (parser.index !== parser.source.length) {
+    throw new Error(`Could not read "${parser.source.slice(parser.index)}".`);
+  }
+
+  return terms;
+}
+
+function parseTermList(parser, options) {
+  const terms = [];
+
+  while (parser.index < parser.source.length) {
+    if (options.stopAtParen && parser.source[parser.index] === ")") {
+      break;
+    }
+
+    const sign = readTermSign(parser);
+    if (parser.index >= parser.source.length || (options.stopAtParen && parser.source[parser.index] === ")")) {
+      throw new Error("A sign needs a term after it.");
+    }
+
+    terms.push(parseSingleTerm(parser, sign, options));
+
+    const next = parser.source[parser.index];
+    if (!next || next === "+" || next === "-" || (options.stopAtParen && next === ")")) {
+      continue;
+    }
+
+    throw new Error(`Put + or - before "${next}".`);
+  }
+
+  if (terms.length === 0) {
+    throw new Error("Each side needs at least one term.");
+  }
+
+  return terms;
+}
+
+function readTermSign(parser) {
+  let sign = 1;
+
+  while (parser.source[parser.index] === "+" || parser.source[parser.index] === "-") {
+    if (parser.source[parser.index] === "-") {
+      sign *= -1;
+    }
+    parser.index += 1;
+  }
+
+  return sign;
+}
+
+function parseSingleTerm(parser, sign, options) {
+  if (parser.source[parser.index] === "(") {
+    return parseGroupTerm(parser, sign, 1, false, false, options);
+  }
+
+  const number = readNumber(parser);
+  if (number) {
+    let explicitMul = false;
+    if (parser.source[parser.index] === "*") {
+      explicitMul = true;
+      parser.index += 1;
+    }
+
+    if (parser.source[parser.index]?.toLowerCase() === "x") {
+      parser.index += 1;
+      const degree = readVariableDegree(parser);
+      return makeVariableTerm(degree, sign * number.value, {
+        explicitMul,
+        explicitCoeff: true,
+      });
+    }
+
+    if (parser.source[parser.index] === "(") {
+      return parseGroupTerm(parser, sign, number.value, explicitMul, true, options);
+    }
+
+    if (explicitMul) {
+      throw new Error("A * needs x or parentheses after it.");
+    }
+
+    return constantTerm(sign * number.value);
+  }
+
+  if (parser.source[parser.index]?.toLowerCase() === "x") {
+    parser.index += 1;
+    return makeVariableTerm(readVariableDegree(parser), sign);
+  }
+
+  throw new Error(`Could not read "${parser.source[parser.index]}".`);
+}
+
+function readVariableDegree(parser) {
+  if (parser.source[parser.index] !== "^") {
+    return 1;
+  }
+
+  parser.index += 1;
+  const match = parser.source.slice(parser.index).match(/^\d+/);
+  if (!match) {
+    throw new Error("Write exponents like x^2.");
+  }
+
+  parser.index += match[0].length;
+  const degree = Number(match[0]);
+  if (degree !== 2) {
+    throw new Error("Only x and x^2 are supported right now.");
+  }
+
+  return degree;
+}
+
+function parseGroupTerm(parser, sign, coefficient, explicitMul, explicitCoeff, options) {
+  if (!options.allowGroups) {
+    throw new Error("Nested parentheses are not supported yet.");
+  }
+
+  parser.index += 1;
+  const inner = parseTermList(parser, { stopAtParen: true, allowGroups: false });
+
+  if (parser.source[parser.index] !== ")") {
+    throw new Error("Close the parentheses.");
+  }
+
+  parser.index += 1;
+  return groupTerm(sign * coefficient, inner, {
+    explicitCoeff,
+    explicitMul,
+    parensVisible: true,
+  });
+}
+
+function readNumber(parser) {
+  const match = parser.source.slice(parser.index).match(/^((?:\d+(?:\.\d*)?|\.\d+)(?:\/(?:\d+(?:\.\d*)?|\.\d+))?)/);
+  if (!match) {
+    return null;
+  }
+
+  parser.index += match[1].length;
+  return {
+    value: parseNumberLiteral(match[1]),
+  };
+}
+
+function parseNumberLiteral(literal) {
+  const parts = literal.split("/");
+
+  if (parts.length === 2) {
+    const numerator = Number(parts[0]);
+    const denominator = Number(parts[1]);
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+      throw new Error("Fractions need a non-zero denominator.");
+    }
+    return numerator / denominator;
+  }
+
+  const value = Number(literal);
+  if (!Number.isFinite(value)) {
+    throw new Error(`Could not read ${literal}.`);
+  }
+  return value;
+}
+
 function formatNumber(value) {
   if (Number.isInteger(value)) {
     return String(value);
@@ -457,7 +738,7 @@ function formatNumber(value) {
 }
 
 function signedValue(term) {
-  if (term.kind === "linear") {
+  if (isVariableTerm(term)) {
     return term.sign * term.coeff;
   }
   if (term.kind === "constant") {
@@ -1172,7 +1453,9 @@ function combineDraggedTerms(sideName, sourceId, targetId) {
   const targetLabel = termLabel(target.term, target.index, true);
   const combinedValue = signedValue(source.term) + signedValue(target.term);
   const combinedTerm =
-    source.term.kind === "linear" ? linearTerm(combinedValue) : constantTerm(combinedValue);
+    isVariableTerm(source.term)
+      ? makeVariableTerm(source.term.degree, combinedValue)
+      : constantTerm(combinedValue);
 
   pushHistory();
   state[sideName] = state[sideName].filter((term) => term.id !== sourceId && term.id !== targetId);
@@ -1344,7 +1627,7 @@ function moveFactorAcross(fromSide, index, toSide, drag) {
   beginMotion();
   const sourceRect = (drag.factorEl ?? drag.termEl).getBoundingClientRect();
 
-  if (term.kind === "linear") {
+  if (isVariableTerm(term)) {
     term.sign = 1;
     term.coeff = 1;
     term.explicitCoeff = false;
@@ -1354,6 +1637,7 @@ function moveFactorAcross(fromSide, index, toSide, drag) {
   if (term.kind === "group") {
     term.sign = 1;
     term.coeff = 1;
+    term.explicitCoeff = false;
     term.explicitMul = false;
   }
 
@@ -1379,15 +1663,15 @@ function moveFactorAcross(fromSide, index, toSide, drag) {
 }
 
 function canRevealMultiplication(term) {
-  return (term.kind === "linear" || term.kind === "group") && !term.explicitMul;
+  return (isVariableTerm(term) || term.kind === "group") && !term.explicitMul;
 }
 
 function canHideMultiplication(term) {
-  return (term.kind === "linear" || term.kind === "group") && term.explicitMul;
+  return (isVariableTerm(term) || term.kind === "group") && term.explicitMul;
 }
 
 function canMoveFactor(term) {
-  return term.kind === "linear" || term.kind === "group";
+  return isVariableTerm(term) || term.kind === "group";
 }
 
 function canMoveFactorAcross(sideName, term) {
@@ -1395,8 +1679,8 @@ function canMoveFactorAcross(sideName, term) {
 }
 
 function canCombineTerms(first, second) {
-  if (first.kind === "linear" && second.kind === "linear") {
-    return first.variable === second.variable;
+  if (isVariableTerm(first) && isVariableTerm(second)) {
+    return first.variable === second.variable && first.degree === second.degree;
   }
   if (first.kind === "constant" && second.kind === "constant") {
     return !first.displayExpr && !second.displayExpr;
@@ -1415,9 +1699,10 @@ function productFactorLabel(value) {
 function productOperandLabel(term) {
   const value = signedValue(term);
 
-  if (term.kind === "linear") {
+  if (isVariableTerm(term)) {
     const abs = Math.abs(value);
-    const body = abs === 1 ? term.variable : `${formatNumber(abs)}${term.variable}`;
+    const variableLabel = variableTermLabel(term);
+    const body = abs === 1 ? variableLabel : `${formatNumber(abs)}${variableLabel}`;
     return value < 0 ? `(-${body})` : body;
   }
 
@@ -1429,14 +1714,14 @@ function productOperandLabel(term) {
 }
 
 function setProductVisibility(term, visible) {
-  if (!term || (term.kind !== "linear" && term.kind !== "group")) {
+  if (!term || (!isVariableTerm(term) && term.kind !== "group")) {
     return;
   }
 
   pushHistory();
   term.explicitMul = visible;
 
-  if (term.kind === "linear") {
+  if (isVariableTerm(term)) {
     term.explicitCoeff = visible || term.coeff !== 1;
   }
 
@@ -1454,7 +1739,7 @@ function revealTerm(term) {
     return;
   }
 
-  if (term.kind === "linear") {
+  if (isVariableTerm(term)) {
     if (term.coeff === 1 && !term.explicitCoeff) {
       pushHistory();
       term.explicitCoeff = true;
@@ -1520,8 +1805,8 @@ function expandGroup(groupId) {
 }
 
 function multiplyTerm(term, factor) {
-  if (term.kind === "linear") {
-    return linearTerm(signedValue(term) * factor, { explicitMul: false });
+  if (isVariableTerm(term)) {
+    return makeVariableTerm(term.degree, signedValue(term) * factor, { explicitMul: false });
   }
   if (term.kind === "constant") {
     return constantTerm(signedValue(term) * factor);
@@ -1558,8 +1843,8 @@ function divideTerm(term, factor) {
   if (term.kind === "constant") {
     return constantTerm(signedValue(term) / factor);
   }
-  if (term.kind === "linear") {
-    return linearTerm(signedValue(term) / factor, {
+  if (isVariableTerm(term)) {
+    return makeVariableTerm(term.degree, signedValue(term) / factor, {
       explicitMul: term.explicitMul,
       explicitCoeff: true,
     });
@@ -1585,14 +1870,19 @@ function combineAll() {
 
 function combineSide(sideName) {
   const terms = state[sideName];
+  let quadraticTotal = 0;
   let linearTotal = 0;
   let constantTotal = 0;
+  const quadraticTerms = [];
   const linearTerms = [];
   const constantTerms = [];
   const untouched = [];
 
   for (const term of terms) {
-    if (term.kind === "linear" && !term.displayExpr) {
+    if (term.kind === "quadratic") {
+      quadraticTotal += signedValue(term);
+      quadraticTerms.push(term);
+    } else if (term.kind === "linear" && !term.displayExpr) {
       linearTotal += signedValue(term);
       linearTerms.push(term);
     } else if (term.kind === "constant" && !term.displayExpr) {
@@ -1606,12 +1896,31 @@ function combineSide(sideName) {
   const next = [];
   let changed = false;
 
+  if (quadraticTerms.length > 0) {
+    if (quadraticTerms.length > 1) {
+      changed = true;
+      if (quadraticTotal !== 0) {
+        const combined = quadraticTerm(quadraticTotal);
+        state.combinedId = combined.id;
+        next.push(combined);
+      }
+    } else {
+      next.push(quadraticTerms[0]);
+    }
+
+    if (quadraticTerms.length > 1 && quadraticTotal === 0) {
+      changed = true;
+    }
+  }
+
   if (linearTerms.length > 0) {
     if (linearTerms.length > 1) {
       changed = true;
       if (linearTotal !== 0) {
         const combined = linearTerm(linearTotal);
-        state.combinedId = combined.id;
+        if (!state.combinedId) {
+          state.combinedId = combined.id;
+        }
         next.push(combined);
       }
     } else {
@@ -1700,7 +2009,7 @@ function revealAll() {
 
   for (const side of ["left", "right"]) {
     for (const term of state[side]) {
-      if (term.kind === "linear") {
+      if (isVariableTerm(term)) {
         if (!term.explicitCoeff && term.coeff === 1) {
           term.explicitCoeff = true;
           changed = true;
@@ -1762,13 +2071,16 @@ function sortSide(terms) {
 }
 
 function rankTerm(term) {
-  if (term.kind === "linear") {
+  if (term.kind === "quadratic") {
     return 0;
   }
-  if (term.kind === "group") {
+  if (term.kind === "linear") {
     return 1;
   }
-  return 2;
+  if (term.kind === "group") {
+    return 2;
+  }
+  return 3;
 }
 
 function clearPulseIds() {
@@ -1992,7 +2304,31 @@ function singleConstant(sideName) {
 }
 
 function hasLikeTerms(sideName) {
-  return state[sideName].filter((term) => term.kind === "linear").length > 1;
+  const counts = new Map();
+
+  for (const term of state[sideName]) {
+    const key = getLikeTermKey(term);
+    if (!key) {
+      continue;
+    }
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return [...counts.values()].some((count) => count > 1);
+}
+
+function getLikeTermKey(term) {
+  if (isVariableTerm(term)) {
+    return `${term.variable}^${term.degree}`;
+  }
+  if (term.kind === "constant" && !term.displayExpr) {
+    return "constant";
+  }
+  return "";
+}
+
+function sideHasVariableTerm(sideName) {
+  return state[sideName].some((term) => isVariableTerm(term));
 }
 
 function hasLinearValue(sideName, value) {
@@ -2001,6 +2337,26 @@ function hasLinearValue(sideName, value) {
 
 function hasConstantValue(sideName, value) {
   return state[sideName].some((term) => term.kind === "constant" && signedValue(term) === value);
+}
+
+function getHintText() {
+  if (levels[state.level]) {
+    return levels[state.level].hint();
+  }
+
+  if (state.left.some((term) => term.kind === "group") || state.right.some((term) => term.kind === "group")) {
+    return "Reveal or distribute the parentheses, then combine like terms.";
+  }
+  if (hasLikeTerms("left") || hasLikeTerms("right")) {
+    return "Drag like terms together on the same side to combine them.";
+  }
+  if (sideHasVariableTerm("left") && state.left.length > 1) {
+    return "Move constants away from the variable term, then move multiplying factors across as division.";
+  }
+  if (sideHasVariableTerm("right") && state.right.length > 1) {
+    return "Move constants away from the variable term, then move multiplying factors across as division.";
+  }
+  return "Move terms across the equals sign to isolate the variable term on one side.";
 }
 
 dom.levelButtons.forEach((button) => {
@@ -2024,7 +2380,7 @@ dom.undoButton.addEventListener("click", () => {
 
 dom.resetButton.addEventListener("click", () => {
   if (!animationLock) {
-    loadLevel(state.level);
+    resetCurrentEquation();
   }
 });
 dom.combineButton.addEventListener("click", () => {
@@ -2046,10 +2402,17 @@ dom.hintButton.addEventListener("click", () => {
   if (animationLock) {
     return;
   }
-  state.lastRule = levels[state.level].hint();
+  state.lastRule = getHintText();
   render();
 });
-dom.equalsZone.addEventListener("dblclick", (event) => {
+dom.equationForm.addEventListener("submit", submitCustomEquation);
+dom.equationInput.addEventListener("input", () => {
+  dom.equationInput.classList.remove("is-invalid");
+});
+dom.equalsZone.addEventListener("click", (event) => {
+  if (event.detail > 1) {
+    return;
+  }
   event.preventDefault();
   swapEquationSides();
 });

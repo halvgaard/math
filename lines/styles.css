@@ -108,11 +108,39 @@ button {
 }
 
 .stage {
+  position: relative;
   min-height: 420px;
   display: grid;
   place-items: center;
   overflow: hidden;
   touch-action: none;
+}
+
+.line-hint {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  top: 0;
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #777;
+  font-size: 0.76rem;
+  font-weight: 620;
+  letter-spacing: 0;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(0, 0);
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+.line-hint.is-visible {
+  opacity: 1;
 }
 
 .shortcuts {
@@ -191,6 +219,32 @@ button {
   font-size: 18px;
   font-weight: 720;
   pointer-events: none;
+}
+
+.axis-scale-handle {
+  pointer-events: all;
+}
+
+.axis-scale-handle-x {
+  cursor: ew-resize;
+}
+
+.axis-scale-handle-y {
+  cursor: ns-resize;
+}
+
+.axis-scale-hit {
+  fill: transparent;
+}
+
+.axis-scale-dot {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 1.8;
+}
+
+.axis-scale-handle:hover .axis-scale-dot {
+  fill: var(--soft);
 }
 
 .tick-label {

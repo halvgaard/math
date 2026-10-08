@@ -3,28 +3,34 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Algebra</title>
+    <title>algebra</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main class="app">
       <header class="topbar">
-        <nav class="app-switch" aria-label="Prototype switcher">
+        <nav class="app-switch" aria-label="App switcher">
           <a href="../algebra/index.html" aria-current="page">algebra</a>
           <a href="../lines/index.html">line</a>
         </nav>
-        <nav class="levelbar" aria-label="Equation set">
-          <button class="level-button is-active" type="button" data-level="isolate">2x + 1 = 3x + 8</button>
-          <button class="level-button" type="button" data-level="combine">2x + 3x = 10</button>
-          <button class="level-button" type="button" data-level="coefficient">4x - 5 = 11</button>
-          <button class="level-button" type="button" data-level="parentheses">3(x + 2) = 15</button>
-          <button class="level-button" type="button" data-level="signedParentheses">-2(x - 3) = 10</button>
-        </nav>
+        <div class="equation-controls">
+          <nav class="levelbar" aria-label="Equation set">
+            <button class="level-button is-active" type="button" data-level="isolate">2x + 1 = 3x + 8</button>
+            <button class="level-button" type="button" data-level="combine">2x + 3x = 10</button>
+            <button class="level-button" type="button" data-level="coefficient">4x - 5 = 11</button>
+            <button class="level-button" type="button" data-level="parentheses">3(x + 2) = 15</button>
+            <button class="level-button" type="button" data-level="signedParentheses">-2(x - 3) = 10</button>
+          </nav>
+          <form class="equation-form" id="equationForm" aria-label="Custom equation">
+            <input id="equationInput" name="equation" type="text" value="2x + 1 = 3x + 8" autocomplete="off" spellcheck="false">
+            <button type="submit">Load</button>
+          </form>
+        </div>
       </header>
 
       <section class="stage" id="stage" aria-label="Equation playground">
         <div class="side side-left" id="leftSide" data-side="left"></div>
-        <button class="equals-zone" id="equalsZone" type="button" aria-label="Double click to swap left and right sides">
+        <button class="equals-zone" id="equalsZone" type="button" aria-label="Click to swap left and right sides">
           <span>=</span>
         </button>
         <div class="side side-right" id="rightSide" data-side="right"></div>
