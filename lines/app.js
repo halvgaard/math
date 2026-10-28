@@ -31,6 +31,8 @@ const plot = {
 
 const VERTICAL_EPSILON = 0.03;
 const SLOPE_RUN_UNITS = 1;
+const HANDLE_HIT_RADIUS = 12;
+const HANDLE_TOUCH_RADIUS = 24;
 const MAX_FRACTION_DENOMINATOR = 12;
 const MIN_AXIS_EXTENT = 2;
 const MAX_AXIS_EXTENT = 30;
@@ -207,7 +209,7 @@ function renderPoints() {
     };
 
     if (!isVisibleWorldPoint(slopePoint.x, slopePoint.y)) {
-      appendPoint(interceptPoint, { className: "intercept-point" });
+      appendPoint(interceptPoint, { className: "intercept-point", handle: "intercept" });
       appendSelectedPoint();
       return;
     }
@@ -230,13 +232,13 @@ function renderPoints() {
         class: "slope-rise",
       }),
     );
-    appendPoint(interceptPoint, { className: "intercept-point" });
+    appendPoint(interceptPoint, { className: "intercept-point", handle: "intercept" });
     appendPoint(slopePoint, { className: "slope-handle", handle: "slope" });
     appendSelectedPoint();
     return;
   }
 
-  appendPoint(interceptPoint, { className: "intercept-point" });
+  appendPoint(interceptPoint, { className: "intercept-point", handle: "intercept" });
   appendSelectedPoint();
 }
 
@@ -262,9 +264,20 @@ function appendPoint(point, options = {}) {
     class: `point${options.className ? ` ${options.className}` : ""}`,
   });
 
-  if (options.handle === "slope") {
-    circle.dataset.handle = "slope";
-    circle.addEventListener("pointerdown", (event) => onPointerDown(event, "slope-handle"));
+  if (options.handle) {
+    // The visible dot is too small for a finger, so a larger invisible circle takes the input.
+    const group = makeSvg("g", { class: `handle-group ${options.handle}-handle-group` });
+    const hit = makeSvg("circle", {
+      cx: x,
+      cy: y,
+      r: window.matchMedia("(pointer: coarse)").matches ? HANDLE_TOUCH_RADIUS : HANDLE_HIT_RADIUS,
+      class: "handle-hit",
+    });
+    hit.dataset.handle = options.handle;
+    hit.addEventListener("pointerdown", (event) => onPointerDown(event, options.handle));
+    group.append(circle, hit);
+    dom.pointLayer.append(group);
+    return;
   }
 
   if (options.selected) {
@@ -627,7 +640,8 @@ function onPointerDown(event, modeOverride = null) {
     return;
   }
 
-  const mode = modeOverride ?? (event.button === 2 ? "slope" : "intercept");
+  // Dragging the line rotates it around the blue dot; dragging the blue dot moves it.
+  const mode = modeOverride ?? "slope";
   if (isAxisScaleMode(mode) && event.button !== 0) {
     return;
   }
@@ -669,7 +683,7 @@ function onPointerDown(event, modeOverride = null) {
 
   dom.graph.classList.toggle("is-dragging", !isAxisScaleMode(mode));
   dom.graph.classList.toggle("is-axis-scaling", isAxisScaleMode(mode));
-  dom.graph.classList.toggle("is-slope-dragging", mode === "slope" || mode === "slope-handle");
+  dom.graph.classList.toggle("is-slope-dragging", mode === "slope");
   if (isAxisScaleMode(mode)) {
     clearSnapGuide();
   } else {
@@ -724,12 +738,6 @@ function onPointerMove(event) {
     state.drag.currentAngle += deltaAngle;
     state.drag.lastPointerAngle = pointerAngle;
     state.angle = state.drag.currentAngle;
-  }
-
-  if (state.drag.mode === "slope-handle") {
-    const handleY = clamp(pointer.y, plot.minY, plot.maxY);
-    state.angle = Math.atan2(handleY - state.drag.pivot.y, SLOPE_RUN_UNITS);
-    state.drag.currentAngle = state.angle;
   }
 
   renderSnapGuide(shouldSnapOnRelease(event));
@@ -820,9 +828,8 @@ function snapLine(mode = "both", drag = null) {
     state.intercept = clamp(Math.round(state.intercept), plot.minY - 3, plot.maxY + 3);
   }
 
-  if (mode === "slope" || mode === "slope-handle" || mode === "both") {
-    const snapTarget = mode === "slope-handle" ? getSlopeHandleSnapTarget(drag) : getSlopeSnapTarget(drag);
-    state.angle = snapTarget.angle;
+  if (mode === "slope" || mode === "both") {
+    state.angle = getSlopeSnapTarget(drag).angle;
   }
 
   render();
@@ -876,14 +883,6 @@ function renderSnapGuide(active) {
       y2: y,
     });
     setSnapPoint({ x: 0, y: Math.round(state.intercept) });
-    return;
-  }
-
-  if (state.drag.mode === "slope-handle") {
-    const snapTarget = getSlopeHandleSnapTarget(state.drag);
-    setSnapPoint(snapTarget.point);
-    const segment = getLineSegment(snapTarget.angle, state.intercept);
-    setLine(guide, segment);
     return;
   }
 
@@ -1047,18 +1046,6 @@ function getSlopeSnapTarget(drag = null) {
   return {
     point: { x: 1, y: Math.round(pivot.y + getSlopeFromAngle(state.angle)) },
     angle: state.angle,
-  };
-}
-
-function getSlopeHandleSnapTarget(drag = null) {
-  const pivot = drag?.pivot ?? { x: 0, y: state.intercept };
-  const pointer = drag?.lastPointer ?? getPointAlongAngle(state.angle, pivot);
-  const y = clamp(Math.round(pointer.y), plot.minY, plot.maxY);
-  const point = { x: SLOPE_RUN_UNITS, y };
-
-  return {
-    point,
-    angle: Math.atan2(point.y - pivot.y, SLOPE_RUN_UNITS),
   };
 }
 

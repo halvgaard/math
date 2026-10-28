@@ -341,22 +341,33 @@ button {
 .slope-handle {
   stroke: var(--slope-accent);
   stroke-width: 3;
-  cursor: ns-resize;
-  pointer-events: all;
   transition:
     fill 140ms ease,
     stroke-width 140ms ease,
     transform 140ms ease;
 }
 
-.slope-handle:hover,
+.handle-hit {
+  fill: transparent;
+  cursor: ns-resize;
+  pointer-events: all;
+  touch-action: none;
+}
+
+.graph.is-slope-dragging .handle-hit {
+  cursor: grabbing;
+}
+
+.slope-handle-group:hover .slope-handle,
 .graph.is-slope-dragging .slope-handle {
   fill: var(--warn);
   stroke-width: 4;
 }
 
-.graph.is-slope-dragging .slope-handle {
-  cursor: grabbing;
+@media (pointer: coarse) {
+  .shortcuts .mouse-only {
+    display: none;
+  }
 }
 
 .point-label {
